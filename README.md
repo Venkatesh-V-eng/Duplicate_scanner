@@ -1,4 +1,4 @@
-# NexusCheck Ultimate 🛡️
+# Duplicate Document scanner  🛡️
 
 **Intelligent Semantic Plagiarism & Duplicate Detector**
 
