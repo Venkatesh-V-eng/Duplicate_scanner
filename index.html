@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GlitchCoders Ultimate</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Outfit', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
+        .btn-gradient { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); transition: all 0.3s; }
+        .btn-gradient:hover { transform: scale(1.02); box-shadow: 0 0 20px rgba(99,102,241,0.5); }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="min-h-screen p-6">
+
+    <nav class="flex justify-between items-center mb-8 max-w-7xl mx-auto">
+        <h1 class="text-2xl font-bold text-white">Glitch<span class="text-indigo-400">Coders</span> <span class="text-xs bg-indigo-600 px-2 py-1 rounded ml-2">ULTIMATE</span></h1>
+    </nav>
+
+    <main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <div class="lg:col-span-4 space-y-6">
+            <div class="glass-card rounded-2xl p-6">
+                <h3 class="text-indigo-300 font-bold mb-4 uppercase text-xs tracking-wider">Source Material</h3>
+                <input type="file" id="sourceFile" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 transition"/>
+                <p class="text-xs text-slate-500 mt-2">Supports: PDF, DOCX, TXT, JPG, PNG (OCR)</p>
+            </div>
+
+            <div class="glass-card rounded-2xl p-6">
+                <h3 class="text-purple-300 font-bold mb-4 uppercase text-xs tracking-wider">Comparison Database</h3>
+                <input type="file" id="compareFiles" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-700 transition"/>
+            </div>
+
+            <div class="glass-card rounded-2xl p-4 flex items-center justify-between">
+                <span class="text-sm font-bold text-white"><i class="fas fa-globe mr-2"></i> Enable Web Search</span>
+                <input type="checkbox" id="webSearch" class="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500">
+            </div>
+
+            <button onclick="runAnalysis()" id="runBtn" class="w-full btn-gradient text-white font-bold py-4 rounded-xl shadow-lg cursor-pointer">
+                <i class="fas fa-bolt mr-2"></i> Run Deep Scan
+            </button>
+            
+            <p id="loading" class="hidden text-center text-indigo-400 animate-pulse mt-2 text-sm">
+                <i class="fas fa-circle-notch fa-spin mr-2"></i> Scanning Internet & Vectorizing...
+            </p>
+        </div>
+
+        <div class="lg:col-span-8 space-y-6">
+            <div id="chartsArea" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="glass-card p-4 rounded-xl h-72 relative flex flex-col">
+                    <h4 class="text-xs font-bold text-slate-400 mb-2 uppercase">Risk Overview</h4>
+                    <div class="flex-grow relative">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass-card p-4 rounded-xl h-72 relative flex flex-col">
+                    <h4 class="text-xs font-bold text-slate-400 mb-2 uppercase">Similarity Ranking</h4>
+                    <div class="flex-grow relative">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="resultsList" class="hidden space-y-4">
+                </div>
+        </div>
+    </main>
+
+    <script>
+        let pieChart = null;
+        let barChart = null;
+
+        async function runAnalysis() {
+            console.log("Button Clicked! Starting..."); // Debug Log
+            
+            const source = document.getElementById('sourceFile').files[0];
+            const targets = document.getElementById('compareFiles').files;
+            const webSearch = document.getElementById('webSearch').checked;
+            const runBtn = document.getElementById('runBtn');
+            const loading = document.getElementById('loading');
+
+            // 1. Validation
+            if (!source) {
+                alert("Please upload a source file first!");
+                return;
+            }
+
+            // 2. UI Loading State
+            loading.classList.remove('hidden');
+            runBtn.disabled = true;
+            runBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
+            runBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            // Clear previous results
+            document.getElementById('chartsArea').classList.add('hidden');
+            document.getElementById('resultsList').classList.add('hidden');
+            document.getElementById('resultsList').innerHTML = '';
+
+            // 3. Prepare Data
+            const formData = new FormData();
+            formData.append('source_file', source);
+            formData.append('enable_web_search', webSearch);
+            for (let i = 0; i < targets.length; i++) {
+                formData.append('comparison_files', targets[i]);
+            }
+
+            try {
+                // 4. Send to Backend
+                console.log("Sending request to backend...");
+                const res = await fetch('http://127.0.0.1:8000/analyze', { 
+                    method: 'POST', 
+                    body: formData 
+                });
+                
+                if (!res.ok) {
+                    throw new Error(`Server Error: ${res.status}`);
+                }
+                
+                const data = await res.json();
+                console.log("Data received:", data);
+                
+                if (data.status === 'success') {
+                    renderDashboard(data.data);
+                } else {
+                    alert("Error: " + data.message);
+                }
+
+            } catch (e) {
+                console.error("Fetch Error:", e);
+                alert("Connection Failed! \n1. Is the backend running? (uvicorn backend:app)\n2. Check terminal for errors.");
+            } finally {
+                // 5. Reset Button
+                loading.classList.add('hidden');
+                runBtn.disabled = false;
+                runBtn.innerHTML = '<i class="fas fa-bolt mr-2"></i> Run Deep Scan';
+                runBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function renderDashboard(results) {
+            document.getElementById('chartsArea').classList.remove('hidden');
+            const container = document.getElementById('resultsList');
+            container.classList.remove('hidden');
+
+            let high=0, med=0, low=0;
+            const names=[], scores=[], colors=[];
+
+            results.forEach(item => {
+                let colorClass = 'border-emerald-500';
+                let scoreColor = 'text-emerald-400';
+                let barColor = '#10b981'; 
+
+                if (item.similarity_score > 80) {
+                    high++;
+                    colorClass = 'border-rose-500';
+                    scoreColor = 'text-rose-400';
+                    barColor = '#f43f5e'; 
+                } else if (item.similarity_score > 50) {
+                    med++;
+                    colorClass = 'border-amber-500';
+                    scoreColor = 'text-amber-400';
+                    barColor = '#f59e0b'; 
+                } else {
+                    low++;
+                }
+
+                let displayName = item.filename.length > 15 ? item.filename.substring(0, 15) + "..." : item.filename;
+                names.push(displayName);
+                scores.push(item.similarity_score);
+                colors.push(barColor);
+
+                let matchesHtml = item.matches && item.matches.length > 0 
+                    ? `<div class="mt-3 bg-slate-900/50 p-3 rounded text-xs text-rose-300 border border-rose-500/30">
+                        <strong><i class="fas fa-highlighter mr-1"></i> Flagged Sentences:</strong>
+                        <ul class="list-disc ml-4 mt-1 space-y-1 italic opacity-80">${item.matches.map(m => `<li>"${m}"</li>`).join('')}</ul>
+                       </div>` 
+                    : '';
+
+                const card = `
+                    <div class="glass-card p-5 rounded-xl border-l-4 ${colorClass} animate-fade-in">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-bold text-white text-lg"><i class="fas ${item.type === 'Internet' ? 'fa-globe text-blue-400' : 'fa-file-alt text-slate-400'} mr-2"></i>${item.filename}</h4>
+                                <span class="text-[10px] text-slate-300 bg-slate-700/50 px-2 py-1 rounded uppercase tracking-wider border border-slate-600">${item.type}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-3xl font-bold ${scoreColor}">${item.similarity_score}%</span>
+                                <p class="text-[10px] text-slate-400 uppercase">Match Score</p>
+                            </div>
+                        </div>
+                        ${matchesHtml}
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+
+            // RENDER CHARTS
+            setTimeout(() => {
+                if (pieChart) pieChart.destroy();
+                if (barChart) barChart.destroy();
+
+                pieChart = new Chart(document.getElementById('pieChart'), {
+                    type: 'doughnut',
+                    data: { 
+                        labels: ['High Risk', 'Medium Risk', 'Safe'], 
+                        datasets: [{ 
+                            data: [high, med, low], 
+                            backgroundColor: ['#f43f5e', '#f59e0b', '#10b981'], 
+                            borderWidth: 0,
+                            hoverOffset: 4
+                        }] 
+                    },
+                    options: { 
+                        responsive: true,
+                        maintainAspectRatio: false, 
+                        layout: { padding: 20 },
+                        plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 12 }, padding: 20 } } } 
+                    }
+                });
+
+                barChart = new Chart(document.getElementById('barChart'), {
+                    type: 'bar',
+                    data: { 
+                        labels: names, 
+                        datasets: [{ 
+                            data: scores, 
+                            backgroundColor: colors, 
+                            borderRadius: 4,
+                            barThickness: 20
+                        }] 
+                    },
+                    options: { 
+                        indexAxis: 'y', 
+                        responsive: true,
+                        maintainAspectRatio: false, 
+                        layout: { padding: 10 },
+                        scales: { x: { display: false, max: 100 }, y: { ticks: { color: '#cbd5e1', font: { size: 11 } }, grid: { display: false } } }, 
+                        plugins: { legend: { display: false } } 
+                    }
+                });
+            }, 100);
+        }
+    </script>
+</body>
+</html>
